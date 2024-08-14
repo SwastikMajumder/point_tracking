@@ -1,52 +1,36 @@
-from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+<!DOCTYPE html>
+<html>
+<head>
+    <title>math Ai</title>
+</head>
+<body>
+    <h1>math Ai v1.0</h1>
 
+    <!-- Input box for user to enter data -->
+    <textarea id="user-input" rows="4" cols="50" placeholder="type your equation here...">1+1</textarea><br>
+    <button onclick="runPython()">simplify equation</button>
 
-app = FastAPI()
+    <!-- Display the result -->
+    <pre id="result">the output will appear here...</pre>
 
-@app.get("/", response_class=HTMLResponse)
-async def read_root():
-    return '''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>math Ai</title>
-    </head>
-    <body>
-        <h1>solve the math equation</h1>
-        <form id="input-form">
-            <label for="input_string">enter equation in string format</label><br>
-            <textarea id="input_string" name="input_string" placeholder="type here..."></textarea><br>
-            <button type="button" onclick="submitInput()">Submit</button>
-        </form>
-        <div id="output"></div>
+    <!-- Load Pyodide -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.21.3/full/pyodide.js"></script>
+    <script>
+        async function runPython() {
+            try {
+		document.getElementById('result').textContent = `calculating answer... please wait`;
+                // Load Pyodide
+                let pyodide = await loadPyodide();
+                console.log("Pyodide loaded successfully");
 
-        <script>
-            function submitInput() {
-                const form = document.getElementById('input-form');
-                const formData = new FormData(form);
+                // Load the Lark package
+                await pyodide.loadPackage('micropip');
+                let micropip = pyodide.pyimport('micropip');
+                await micropip.install('lark-parser');
+                console.log("Lark package installed");
 
-                fetch('/process/', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('output').innerHTML = '<pre>' + data.result + '</pre>';
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    document.getElementById('output').innerHTML = '<pre>Error: ' + error + '</pre>';
-                });
-            }
-        </script>
-    </body>
-    </html>
-    '''
-
+                // Define the Python code directly in a string
+                let pythonCode = `
 import copy
 from lark import Lark, Tree
 
@@ -59,7 +43,7 @@ class TreeNode:
 
 # convert string representation into tree
 def tree_form(tabbed_strings):
-    lines = tabbed_strings.split("\n")
+    lines = tabbed_strings.split("\\n")
     root = TreeNode("Root") # add a dummy node
     current_level_nodes = {0: root}
     stack = [root]
@@ -80,7 +64,7 @@ def str_form(node):
     def recursive_str(node, depth=0):
         result = "{}{}".format(' ' * depth, node.name) # spacings
         for child in node.children:
-            result += "\n" + recursive_str(child, depth + 1) # one node in one line
+            result += "\\n" + recursive_str(child, depth + 1) # one node in one line
         return result
     return recursive_str(node)
 
@@ -546,7 +530,7 @@ def return_formula_file(file_name):
       x = medium_main
     else:
       x = low_main
-    x = x.split("\n\n")
+    x = x.split("\\n\\n")
     input_f = [x[i] for i in range(0, len(x), 2)] # alternative formula lhs and then formula rhs
     output_f = [x[i] for i in range(1, len(x), 2)]
     input_f = [tree_form(item) for item in input_f] # convert into tree form
@@ -633,7 +617,26 @@ def process_input(string_input):
     return "Ai says that " + string_equation(init) + " is equal to " + string_equation(eq)
 
 
-@app.post("/process/")
-async def process_request(input_string: str = Form(...)):
-    result = process_input(input_string)  # Call the function from script.py
-    return {"result": result}
+# Parse the input
+final_required_output = process_input(input_string)
+`;
+                let userInput = document.getElementById('user-input').value;
+                console.log("User input:", userInput);
+
+                // Run Python code
+                await pyodide.runPythonAsync(`
+input_string = ${JSON.stringify(userInput)};
+${pythonCode}
+                `);
+		let pyodideOutput = await pyodide.runPythonAsync('final_required_output');
+                console.log("Python code executed successfully");
+
+                // Display the result
+                document.getElementById('result').textContent = `${pyodideOutput}`;
+            } catch (error) {
+                console.error("Error running Python code:", error);
+                document.getElementById('result').textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
